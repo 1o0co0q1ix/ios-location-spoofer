@@ -28,6 +28,11 @@ jobs:
           chmod +x make.sh
           ./make.sh
 
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
       - name: Fix Xcode Project References & Missing Scopes
         run: |
           # 1. Entferne kaputte AppIcon.icon Referenz
