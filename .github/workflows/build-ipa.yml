@@ -28,6 +28,67 @@ jobs:
           chmod +x make.sh
           ./make.sh
 
+      - name: Regenerate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+          python3 << 'PYEOF'
+          with open("location-spoofer.xcodeproj/project.pbxproj", "r") as f:
+              content = f.read()
+
+          lines = content.split("\n")
+          lib_build_id = None
+          for line in lines:
+              if "libgolocationspoofer.a" in line and "PBXBuildFile" in line:
+                  lib_build_id = line.strip().split(" ")[0]
+                  break
+
+          if lib_build_id:
+              new_lines = []
+              phase = None
+              frameworks_contains_lib = False
+
+              for line in lines:
+                  if "/* Resources */ = {" in line:
+                      phase = "resources"
+                  elif "/* Frameworks */ = {" in line:
+                      phase = "frameworks"
+                  elif phase == "resources" and "isa = PBXResourcesBuildPhase;" in line:
+                      pass
+                  elif phase == "frameworks" and "isa = PBXFrameworksBuildPhase;" in line:
+                      pass
+                  elif phase in ("resources", "frameworks") and line.strip() == "};":
+                      phase = None
+
+                  if phase == "resources" and lib_build_id in line:
+                      continue
+
+                  if phase == "frameworks" and lib_build_id in line:
+                      frameworks_contains_lib = True
+
+                  new_lines.append(line)
+
+              if not frameworks_contains_lib:
+                  phase = None
+                  for offset, line in enumerate(new_lines):
+                      if "/* Frameworks */ = {" in line:
+                          phase = "frameworks"
+                      elif phase == "frameworks" and line.strip() == "};":
+                          phase = None
+                      elif phase == "frameworks" and "files = (" in line:
+                          new_lines.insert(
+                              offset + 1,
+                              f"\t\t\t\t{lib_build_id} /* libgolocationspoofer.a in Frameworks */,"
+                          )
+                          break
+
+              with open("location-spoofer.xcodeproj/project.pbxproj", "w") as f:
+                  f.write("\n".join(new_lines))
+          else:
+              print("libgolocationspoofer.a is linked through LIBRARY_SEARCH_PATHS; no project build-phase patch needed")
+          PYEOF
+
       - name: Build Unsigned Xcode Project
         run: |
           SCHEME=$(xcodebuild -list -project location-spoofer.xcodeproj | awk '/Schemes:/{flag=1;next} flag && NF{print $1; exit}')
