@@ -30,6 +30,9 @@ jobs:
 
       - name: Build Unsigned Xcode Project
         run: |
+          # Entfernt die kaputte Referenz auf das fehlende AppIcon.icon aus dem Xcode-Projekt
+          sed -i '' '/AppIcon\.icon/d' location-spoofer.xcodeproj/project.pbxproj
+
           SCHEME=$(xcodebuild -list -project location-spoofer.xcodeproj | awk '/Schemes:/{flag=1;next} flag && NF{print $1; exit}')
           echo "Building scheme: $SCHEME"
           xcodebuild build \
@@ -41,8 +44,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_team="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            ASSETCATALOG_COMPILER_APPICON_NAME=""
 
       - name: Package IPA
         run: |
