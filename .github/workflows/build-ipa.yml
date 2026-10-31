@@ -1,0 +1,58 @@
+name: Build LocationSpoofer IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build GoSpoofer Framework
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile init
+          cd GoSpoofer
+          chmod +x make.sh
+          ./make.sh
+
+      - name: Build Unsigned Xcode Project
+        run: |
+          SCHEME=$(xcodebuild -list -project location-spoofer.xcodeproj | awk '/Schemes:/{flag=1;next} flag && NF{print $1; exit}')
+          echo "Building scheme: $SCHEME"
+          xcodebuild build \
+            -project location-spoofer.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_team="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          cp -R "$APP_PATH" Payload/
+          zip -r9 LocationSpoofer.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocationSpoofer-IPA
+          path: LocationSpoofer.ipa
